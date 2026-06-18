@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>休假规划器 - 最大化休假天数</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f4f8; color: #1a1a2e; padding: 16px; line-height: 1.6; }
+.container { max-width: 900px; margin: 0 auto; }
+h1 { text-align: center; font-size: 24px; margin-bottom: 4px; color: #16213e; }
+.subtitle { text-align: center; font-size: 13px; color: #888; margin-bottom: 20px; }
+.card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); padding: 20px; margin-bottom: 16px; }
+.card h2 { font-size: 16px; margin-bottom: 12px; color: #16213e; border-bottom: 2px solid #e8ecf1; padding-bottom: 8px; }
+.input-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.input-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 140px; }
+.input-group label { font-size: 13px; color: #666; font-weight: 500; }
+.input-group input { padding: 10px 12px; border: 1.5px solid #dde; border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.2s; }
+.input-group input:focus { border-color: #4361ee; }
+.btn { padding: 10px 28px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: #4361ee; color: #fff; }
+.btn-primary:hover { background: #3a56d4; }
+.fixed-info { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px; color: #666; }
+.fixed-info .tag { background: #e8f0fe; color: #4361ee; padding: 3px 10px; border-radius: 20px; font-weight: 600; }
+/* Summary */
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.summary-item { background: #f8fafc; border-radius: 8px; padding: 12px; text-align: center; }
+.summary-item .num { font-size: 28px; font-weight: 700; color: #16213e; }
+.summary-item .lbl { font-size: 11px; color: #888; margin-top: 2px; }
+.summary-item.highlight { background: linear-gradient(135deg, #4361ee, #7209b7); color: #fff; }
+.summary-item.highlight .num, .summary-item.highlight .lbl { color: #fff; }
+.plan-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.plan-step { display: flex; align-items: center; gap: 6px; background: #f1f5f9; border-radius: 20px; padding: 5px 14px; font-size: 13px; }
+.plan-step .step-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.plan-arrow { color: #aaa; font-size: 16px; }
+/* Calendar */
+.months-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.month-card { padding: 0; }
+.month-header { text-align: center; font-weight: 700; font-size: 15px; padding: 10px; background: #f8fafc; border-radius: 12px 12px 0 0; }
+.weekday-row { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 11px; color: #999; padding: 6px 8px; }
+.day-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; padding: 0 8px 10px; }
+.day-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 12px; cursor: default; position: relative; transition: transform 0.15s; }
+.day-cell:hover { transform: scale(1.1); z-index: 2; }
+.day-cell.empty { background: transparent; }
+.day-cell.weekend { color: #aaa; }
+.day-cell.free-weekend { background: #fff8e1; color: #f9a825; font-weight: 600; }
+.day-cell.free-remote { background: #e8eaf6; color: #3949ab; font-weight: 600; }
+.day-cell.pat { background: #e8f5e9; color: #2e7d32; font-weight: 600; }
+.day-cell.annual { background: #e3f2fd; color: #1565c0; font-weight: 600; }
+.day-cell.sick { background: #fff3e0; color: #e65100; font-weight: 600; }
+.day-cell.marriage { background: #fce4ec; color: #c62828; font-weight: 600; }
+.day-cell.holiday { background: #ffebee; color: #c62828; font-weight: 600; }
+.day-cell.free { background: #f5f5f5; color: #999; }
+.day-cell.today { border: 2px solid #4361ee; }
+/* Comparison */
+.comp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.comp-table th, .comp-table td { padding: 10px 12px; text-align: center; border-bottom: 1px solid #eee; }
+.comp-table th { background: #f8fafc; color: #666; font-weight: 600; }
+.comp-table .best-row { background: #e8f0fe; font-weight: 600; }
+.comp-table .best-row td { color: #4361ee; }
+.comp-table .plan-row { cursor: pointer; transition: background 0.15s; }
+.comp-table .plan-row:hover { background: #f0f4ff; }
+.comp-table .plan-row.active-row { background: #dce8fc; font-weight: 600; }
+.best-badge { display: inline-block; background: #4361ee; color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 4px; }
+/* Legend */
+.legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #666; }
+.legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+.disclaimer { font-size: 11px; color: #aaa; margin-top: 12px; text-align: center; }
+.remote-row { display: flex; gap: 10px; align-items: center; margin-top: 8px; font-size: 13px; color: #666; flex-wrap: wrap; }
+.remote-row .label-text { font-weight: 500; white-space: nowrap; }
+.checkbox-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.checkbox-group label { display: flex; align-items: center; gap: 3px; cursor: pointer; padding: 4px 10px; border: 1.5px solid #dde; border-radius: 16px; font-size: 12px; transition: all 0.2s; user-select: none; }
+.checkbox-group label:hover { border-color: #aaa; }
+.checkbox-group input { display: none; }
+.checkbox-group input:checked + span { color: #4361ee; font-weight: 600; }
+.checkbox-group input:checked ~ .chk-bg { display: none; }
+.checkbox-group label:has(input:checked) { background: #e8f0fe; border-color: #4361ee; }
+.day-cell.remote { background: #f3e5f5; color: #7b1fa2; font-weight: 600; }
+.rules-note { font-size: 12px; color: #999; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="container">
+<h1>休假规划器</h1>
+<p class="subtitle">自动组合婚假、产假/陪产假、年假、病假，最大化连续休假天数</p>
+
+<div class="card">
+<h2>输入休假参数</h2>
+<div class="input-row">
+  <div class="input-group">
+    <label>起始休假日期</label>
+    <input type="date" id="startDate">
+  </div>
+  <div class="input-group">
+    <label>年假天数</label>
+    <input type="number" id="annualDays" value="0" min="0" max="30">
+  </div>
+  <div class="input-group">
+    <label>病假天数</label>
+    <input type="number" id="sickDays" value="0" min="0" max="30">
+  </div>
+  <div class="input-group">
+    <label>产假/陪产假天数</label>
+    <input type="number" id="patDays" value="0" min="0" max="200">
+  </div>
+  <div class="input-group">
+    <label>婚假天数</label>
+    <input type="number" id="marriageDays" value="0" min="0" max="30">
+  </div>
+  <button class="btn btn-primary" onclick="calculate()">计算最优方案</button>
+</div>
+<div class="fixed-info">
+  婚假：连续计自然日，遇周末不顺延，遇法定节假日顺延（节假日不消耗假期天数）
+</div>
+<div class="fixed-info">
+  产假/陪产假：连续计日历日，遇法定节假日不顺延，期间周末同样消耗假期时长
+</div>
+<div class="remote-row">
+  <span class="label-text">居家办公日：</span>
+  <div class="checkbox-group" id="remoteCheckboxes">
+    <label><input type="checkbox" value="1" onchange="onRemoteChange()"><span>周一</span></label>
+    <label><input type="checkbox" value="2" onchange="onRemoteChange()"><span>周二</span></label>
+    <label><input type="checkbox" value="3" onchange="onRemoteChange()"><span>周三</span></label>
+    <label><input type="checkbox" value="4" onchange="onRemoteChange()"><span>周四</span></label>
+    <label><input type="checkbox" value="5" onchange="onRemoteChange()"><span>周五</span></label>
+    <label><input type="checkbox" value="6" onchange="onRemoteChange()"><span>周六</span></label>
+    <label><input type="checkbox" value="0" onchange="onRemoteChange()"><span>周日</span></label>
+  </div>
+</div>
+<div class="rules-note">规则：居家办公日无需请假；年假/病假仅消耗需到岗的工作日；病假单次上限 2 天（超出自动拆分）；产假/陪产假连续计日历日；婚假遇法定节假日顺延</div>
+</div>
+
+<div class="card" id="resultCard" style="display:none;">
+<h2>最优方案</h2>
+<div class="summary-grid" id="summaryGrid"></div>
+<div class="plan-bar" id="planBar"></div>
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:#e8f5e9;border:1px solid #4caf50"></span>产假/陪产假</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#e3f2fd;border:1px solid #42a5f5"></span>年假</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#fff3e0;border:1px solid #ff9800"></span>病假</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#fce4ec;border:1px solid #e91e63"></span>婚假</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#ffebee;border:1px solid #ef5350"></span>法定节假日</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#fff8e1;border:1px solid #fdd835"></span>假期内周末（白赚）</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#e8eaf6;border:1px solid #7986cb"></span>假期内居家（白赚）</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#f5f5f5;border:1px solid #ccc"></span>普通周末/居家</div>
+</div>
+<div class="months-grid" id="calendarGrid"></div>
+</div>
+
+<div class="card" id="comparisonCard" style="display:none;">
+<h2>方案对比</h2>
+<div style="overflow-x:auto;">
+  <table class="comp-table" id="compTable">
+    <thead><tr><th>方案</th><th>休假顺序</th><th>总日历天数</th><th>结束日期</th><th>返工日期</th></tr></thead>
+    <tbody id="compBody"></tbody>
+  </table>
+</div>
+</div>
+
+<p class="disclaimer">注：2025-2026年节假日基于国务院办公厅官方通知；2027年节假日为基于农历推算的预估值，仅供参考。</p>
+</div>
+<script>
+// ===== 节假日数据库 =====
+// makeupWorkDays: 调休补班日（周末但需上班）
+// holidays: 法定节假日（非周末的放假日期）
+// 注意：周六日本身不算 holiday，只有调休造成的工作日放假才算
+
+const HOLIDAYS = {
+  // 2025 年官方公布（国办发明电〔2024〕12号）
+  2025: {
+    makeupWorkDays: new Set([
+      '2025-01-26', // 春节调休（周日上班）
+      '2025-02-08', // 春节调休（周六上班）
+      '2025-04-27', // 劳动节调休（周日上班）
+      '2025-09-28', // 国庆调休（周日上班）
+      '2025-10-11', // 国庆调休（周六上班）
+    ]),
+    holidays: new Set([
+      '2025-01-01',         // 元旦（周三）
+      '2025-01-28','2025-01-29','2025-01-30','2025-01-31', // 春节工作日放假
+      '2025-02-03','2025-02-04',                             // 春节工作日放假
+      '2025-04-04',         // 清明节（周五）
+      '2025-05-01','2025-05-02','2025-05-05',                // 劳动节工作日放假
+      '2025-06-02',         // 端午节（周一）
+      '2025-10-01','2025-10-02','2025-10-03',                // 国庆+中秋工作日放假
+      '2025-10-06','2025-10-07','2025-10-08',
+    ])
+  },
+  // 2026 年官方公布（国办发明电〔2025〕7号）
+  2026: {
+    makeupWorkDays: new Set([
+      '2026-01-04', // 元旦调休（周日上班）
+      '2026-02-14', // 春节调休（周六上班）
+      '2026-02-28', // 春节调休（周六上班）
+      '2026-05-09', // 劳动节调休（周六上班）
+      '2026-09-20', // 国庆调休（周日上班）
+      '2026-10-10', // 国庆调休（周六上班）
+    ]),
+    holidays: new Set([
+      '2026-01-01','2026-01-02',  // 元旦（周四、五；周六1/3不额外标注）
+      '2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-23', // 春节工作日放假
+      '2026-04-06',         // 清明节（周一）
+      '2026-05-01','2026-05-04','2026-05-05', // 劳动节工作日放假
+      '2026-06-19',         // 端午节（周五）
+      '2026-09-25',         // 中秋节（周五）
+      '2026-10-01','2026-10-02','2026-10-05','2026-10-06','2026-10-07', // 国庆工作日放假
+    ])
+  },
+  // 2027 年推算
+  2027: {
+    makeupWorkDays: new Set([
+      '2027-02-04', // 春节调休（周四变工作日，为凑除夕起8天）
+      '2027-02-14', // 春节调休（周日上班）
+      '2027-04-25', // 劳动节调休
+      '2027-09-19', // 国庆调休
+      '2027-10-09', // 国庆调休
+    ]),
+    holidays: new Set([
+      '2027-01-01',         // 元旦（周五）
+      '2027-02-05','2027-02-08','2027-02-09','2027-02-10','2027-02-11','2027-02-12', // 春节工作日放假
+      '2027-04-05','2027-04-06',   // 清明（周一二）
+      '2027-05-03','2027-05-04','2027-05-05', // 劳动节工作日放假
+      '2027-06-09',         // 端午（周三，仅当日）
+      '2027-09-15',         // 中秋（周三，仅当日）
+      '2027-10-01','2027-10-04','2027-10-05','2027-10-06','2027-10-07', // 国庆工作日放假
+    ])
+  }
+};
+
+// 2025-2027 所有 makeupWorkDays / holidays 合集
+const ALL_MAKEUP = new Set();
+const ALL_HOLIDAYS = new Set();
+for (const y of [2025,2026,2027]) {
+  if (HOLIDAYS[y]) {
+    HOLIDAYS[y].makeupWorkDays.forEach(d => ALL_MAKEUP.add(d));
+    HOLIDAYS[y].holidays.forEach(d => ALL_HOLIDAYS.add(d));
+  }
+}
+
+// 法定节假日完整日期区间（含周末，用于标记整个假期范围）
+const HOLIDAY_RANGES = [
+  // 2025
+  { start: '2025-01-01', end: '2025-01-01' },
+  { start: '2025-01-28', end: '2025-02-04' },
+  { start: '2025-04-04', end: '2025-04-06' },
+  { start: '2025-05-01', end: '2025-05-05' },
+  { start: '2025-05-31', end: '2025-06-02' },
+  { start: '2025-10-01', end: '2025-10-08' },
+  // 2026
+  { start: '2026-01-01', end: '2026-01-03' },
+  { start: '2026-02-15', end: '2026-02-23' },
+  { start: '2026-04-04', end: '2026-04-06' },
+  { start: '2026-05-01', end: '2026-05-05' },
+  { start: '2026-06-19', end: '2026-06-21' },
+  { start: '2026-09-25', end: '2026-09-27' },
+  { start: '2026-10-01', end: '2026-10-07' },
+  // 2027（推算）
+  { start: '2027-01-01', end: '2027-01-03' },
+  { start: '2027-02-05', end: '2027-02-12' },
+  { start: '2027-04-04', end: '2027-04-06' },
+  { start: '2027-05-01', end: '2027-05-05' },
+  { start: '2027-06-09', end: '2027-06-09' },
+  { start: '2027-09-15', end: '2027-09-15' },
+  { start: '2027-10-01', end: '2027-10-07' },
+];
+
+const ALL_HOLIDAY_RANGE_DATES = new Set();
+for (const r of HOLIDAY_RANGES) {
+  let cur = new Date(r.start + 'T00:00:00');
+  const end = new Date(r.end + 'T00:00:00');
+  while (cur <= end) {
+    ALL_HOLIDAY_RANGE_DATES.add(fmtDate(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+}
+let REMOTE_DAYS = new Set(); // 居家办公的星期几 (0=周日,1=周一,...6=周六)
+
+function onRemoteChange() {
+  REMOTE_DAYS.clear();
+  document.querySelectorAll('#remoteCheckboxes input:checked').forEach(cb => {
+    REMOTE_DAYS.add(parseInt(cb.value));
+  });
+}
+
+function fmtDate(d) { const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
+function fmtDateCN(d) { return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`; }
+function isWeekend(d) { return d.getDay() === 0 || d.getDay() === 6; }
+
+// 判断是否为法定工作日（排除周末 + 含调休补班 + 排除法定节假日）
+function isWorkday(d) {
+  const s = fmtDate(d);
+  if (ALL_MAKEUP.has(s)) return true;
+  if (ALL_HOLIDAYS.has(s)) return false;
+  return !isWeekend(d);
+}
+
+// 判断是否为法定节假日
+function isLegalHoliday(d) { return ALL_HOLIDAYS.has(fmtDate(d)); }
+
+// 判断是否为居家办公日（仅限工作日才算，周末不算）
+function isRemoteDay(d) { return isWorkday(d) && REMOTE_DAYS.has(d.getDay()); }
+
+// 判断是否需要请假（到岗工作日 = 是工作日且非居家办公日）
+function needsLeave(d) { return isWorkday(d) && !REMOTE_DAYS.has(d.getDay()); }
+
+function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+
+// 找到下一个需要到岗的工作日
+function nextCommuteDay(d) {
+  let cur = new Date(d);
+  cur.setDate(cur.getDate() + 1);
+  while (!needsLeave(cur)) { cur.setDate(cur.getDate() + 1); }
+  return cur;
+}
+
+// 模拟消耗 quota 个请假日后结束日期
+// strict=true: 居家办公日也消耗额度（用于年假/病假，防止居家日"蹭"假期）
+// strict=false: 居家办公日不消耗额度（用于产假/陪产假尾部吸收）
+// 开头自动吸收起始处不需要到岗的连续日（居家/周末/节假日），不消耗额度
+// 尾部自动吸收结束后的不需要到岗连续日，不消耗额度
+function simulateWorkingDays(start, quota, strict) {
+  if (quota <= 0) return { endDate: new Date(start), calendarDays: 0 };
+  let cur = new Date(start);
+  let left = quota, calDays = 0;
+
+  // 吸收开头：起始处如果是周末/节假日（非工作日），先算入假期但不消耗额度
+  // 注意：居家办公日是工作日，严格模式下不吸收，会正常消耗额度
+  let _saft = 0;
+  while (left > 0 && !isWorkday(cur) && _saft++ < 100) {
+    calDays++;
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  // 主循环：消耗额度
+  while (left > 0) {
+    calDays++;
+    if (strict ? isWorkday(cur) : needsLeave(cur)) left--;
+    if (left > 0) cur.setDate(cur.getDate() + 1);
+  }
+
+  // 吸收尾部：连续跳过不需要到岗的日期（居家/周末/节假日）
+  while (true) {
+    const next = new Date(cur);
+    next.setDate(next.getDate() + 1);
+    if (needsLeave(next)) break;
+    cur = next;
+    calDays++;
+  }
+
+  return { endDate: cur, calendarDays: calDays };
+}
+
+// 婚假：n 个连续自然日，遇周末不顺延（消耗假期），遇法定节假日顺延（不消耗，向后延长）
+// 开头吸收：起始处居家/周末/节假日计入假期但不消耗婚假天数
+// 尾部吸收：结束后的居家/周末/节假日自动纳入
+function simulateMarriageLeave(start, quota) {
+  if (quota <= 0) return { endDate: new Date(start), calendarDays: 0 };
+  let cur = new Date(start);
+  let calDays = 0;
+  let left = quota;
+
+  // 吸收开头：起始处如果是居家/周末/节假日，计入假期但不消耗婚假天数
+  let _saft = 0;
+  while (left > 0 && !needsLeave(cur) && _saft++ < 100) {
+    calDays++;
+    cur = addDays(cur, 1);
+  }
+
+  // 主循环：一天天推进，法定节假日顺延（不消耗额度），其余天数（含周末）消耗额度
+  while (left > 0) {
+    calDays++;
+    if (isLegalHoliday(cur)) {
+      // 法定节假日顺延：不消耗婚假天数
+    } else {
+      left--;
+    }
+    if (left > 0) cur = addDays(cur, 1);
+  }
+
+  // 吸收尾部：婚假结束后的居家/周末/节假日自动纳入
+  while (true) {
+    const next = addDays(cur, 1);
+    if (needsLeave(next)) break;
+    cur = next;
+    calDays++;
+  }
+
+  return { endDate: cur, calendarDays: calDays };
+}
+
+// 将病假天数拆分为多个段，每段最多 2 天
+function splitSickDays(n) {
+  const blocks = [];
+  while (n > 0) {
+    const block = Math.min(n, 2);
+    blocks.push(block);
+    n -= block;
+  }
+  return blocks;
+}
+
+// ===== 生成所有排列并找出最优 =====
+// sickBlocks: [{id:'sick_0', days:2}, {id:'sick_1', days:2}, ...]
+function findAllPlans(startDate, annualDays, sickBlocks, patDays, marriageDays) {
+  const baseTypes = [];
+  if (annualDays > 0) baseTypes.push({ id: 'annual', days: annualDays });
+  if (patDays > 0) baseTypes.push({ id: 'pat', days: patDays });
+  if (marriageDays > 0) baseTypes.push({ id: 'marriage', days: marriageDays });
+  for (const sb of sickBlocks) {
+    baseTypes.push({ id: sb.id, days: sb.days, kind: 'sick' });
+  }
+
+  const seen = new Set();
+  const perms = [];
+  function permute(arr, path) {
+    if (arr.length === 0) {
+      const key = path.map(p => p.id).join(',');
+      if (!seen.has(key)) { seen.add(key); perms.push([...path]); }
+      return;
+    }
+    for (let i = 0; i < arr.length; i++) {
+      const next = [...arr];
+      next.splice(i, 1);
+      permute(next, [...path, arr[i]]);
+    }
+  }
+  permute(baseTypes, []);
+
+  const results = perms.map(perm => {
+    const segments = [];
+    let cur = new Date(startDate);
+    let totalCal = 0;
+    for (const item of perm) {
+      let segStart = new Date(cur);
+      let segEnd;
+      let calDays = 0;
+      const type = item.kind || item.id;
+      if (type === 'pat') {
+        // 吸收开头：起始处的居家/周末/节假日计入假期但不额外消耗产假天数
+        let _saft = 0;
+        while (!needsLeave(cur) && _saft++ < 100) {
+          calDays++;
+          cur = addDays(cur, 1);
+        }
+        segEnd = addDays(cur, item.days - 1);
+        calDays += item.days;
+        // 产假/陪产假尾部也吸收居家/周末/节假日
+        while (true) {
+          const next = addDays(segEnd, 1);
+          if (needsLeave(next)) break;
+          segEnd = next;
+          calDays++;
+        }
+      } else if (type === 'marriage') {
+        // 婚假：连续自然日，遇法定节假日顺延
+        const res = simulateMarriageLeave(cur, item.days);
+        segEnd = res.endDate;
+        calDays = res.calendarDays;
+      } else {
+        // 年假/病假使用严格模式：居家办公日也消耗额度，不能"蹭"假期
+        const res = simulateWorkingDays(cur, item.days, true);
+        segEnd = res.endDate;
+        calDays = res.calendarDays;
+      }
+      segments.push({ type, start: segStart, end: segEnd, calDays, daysUsed: item.days });
+      totalCal += calDays;
+      cur = addDays(segEnd, 1);
+    }
+    return { totalCalendarDays: totalCal, segments, startDate: new Date(startDate), endDate: segments[segments.length-1].end };
+  });
+
+  results.sort((a,b) => b.totalCalendarDays - a.totalCalendarDays);
+
+  // 去重：相同类型的排列产生相同结果，保留天数最大的
+  const deduped = [];
+  const seenKeys = new Set();
+  for (const r of results) {
+    const key = r.segments.map(s => s.type + ':' + s.daysUsed).join('|') + '|' + r.totalCalendarDays;
+    if (!seenKeys.has(key)) { seenKeys.add(key); deduped.push(r); }
+  }
+  return deduped;
+}
+
+// ===== 渲染 =====
+const TYPE_LABELS = { pat: '产假/陪产假', annual: '年假', sick: '病假', marriage: '婚假' };
+const TYPE_COLORS = { pat: '#2e7d32', annual: '#1565c0', sick: '#e65100', marriage: '#c62828' };
+const WEEKDAYS = ['日','一','二','三','四','五','六'];
+
+function renderResults(best, allPlans) {
+  const returnDate = nextCommuteDay(best.endDate);
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="summary-item highlight"><div class="num">${best.totalCalendarDays}</div><div class="lbl">总日历天数</div></div>
+    <div class="summary-item"><div class="num">${fmtDateCN(best.startDate)}</div><div class="lbl">开始日期</div></div>
+    <div class="summary-item"><div class="num">${fmtDateCN(best.endDate)}</div><div class="lbl">最后一天</div></div>
+    <div class="summary-item"><div class="num">${fmtDateCN(returnDate)}</div><div class="lbl">返工日期（到岗）</div></div>
+  `;
+
+  document.getElementById('planBar').innerHTML = best.segments.map((seg, i) => {
+    const label = TYPE_LABELS[seg.type];
+    const color = TYPE_COLORS[seg.type];
+    return `${i>0?'<span class="plan-arrow">→</span>':''}
+      <span class="plan-step"><span class="step-dot" style="background:${color}"></span>
+      ${label} ${seg.daysUsed}天 <small style="color:#888">(${fmtDateCN(seg.start)} ~ ${fmtDateCN(seg.end)})</small></span>`;
+  }).join('');
+
+  renderCalendar(best);
+  renderComparison(allPlans, best);
+
+  document.getElementById('resultCard').style.display = '';
+  document.getElementById('comparisonCard').style.display = '';
+}
+
+function renderCalendar(best) {
+  const leaveMap = new Map();
+  for (const seg of best.segments) {
+    let d = new Date(seg.start);
+    const end = seg.end;
+    while (d <= end) {
+      const key = fmtDate(d);
+      if (!leaveMap.has(key)) leaveMap.set(key, seg.type);
+      d.setDate(d.getDate() + 1);
+    }
+  }
+
+  const startMonth = new Date(best.startDate.getFullYear(), best.startDate.getMonth(), 1);
+  const endMonth = new Date(best.endDate.getFullYear(), best.endDate.getMonth() + 1, 0);
+
+  const months = [];
+  let m = new Date(startMonth);
+  while (m <= endMonth) { months.push(new Date(m)); m.setMonth(m.getMonth() + 1); }
+
+  const grid = document.getElementById('calendarGrid');
+  grid.innerHTML = months.map(mon => {
+    const y = mon.getFullYear();
+    const month = mon.getMonth();
+    const daysInMonth = new Date(y, month+1, 0).getDate();
+    const firstDow = new Date(y, month, 1).getDay();
+    let cells = '';
+    for (let i = 0; i < firstDow; i++) cells += '<div class="day-cell empty"></div>';
+    for (let d = 1; d <= daysInMonth; d++) {
+      const date = new Date(y, month, d);
+      const key = fmtDate(date);
+      const lt = leaveMap.get(key);
+      let cls = 'day-cell';
+      let tip = key;
+      const inHolidayRange = ALL_HOLIDAY_RANGE_DATES.has(key);
+
+      if (isLegalHoliday(date) || inHolidayRange) {
+        // 法定节假日（含假期范围内的周末）→ 红色
+        cls += ' holiday'; tip += ' 法定假日';
+        if (isWeekend(date) && !isLegalHoliday(date)) tip += '（假期含周末）';
+      } else if (lt === 'pat' || lt === 'marriage') {
+        // 产假/陪产假或婚假期间（含周末）→ 各自颜色
+        cls += ' ' + lt;
+        tip += ' ' + TYPE_LABELS[lt];
+        if (isWeekend(date)) tip += '（含周末）';
+        else if (isRemoteDay(date)) tip += '（居家办公日）';
+      } else if (lt && isWeekend(date)) {
+        // 年假/病假期内的周末 → 金色（白赚）
+        cls += ' free-weekend';
+        tip += ' 周末（假期内白赚）';
+      } else if (lt && isRemoteDay(date)) {
+        // 年假/病假期内的居家办公 → 靛蓝（白赚）
+        cls += ' free-remote';
+        tip += ' 居家办公（假期内）';
+      } else if (isWeekend(date) || isRemoteDay(date)) {
+        // 非假期内的周末/居家 → 灰色
+        cls += ' weekend';
+        tip += isRemoteDay(date) ? ' 居家办公' : ' 周末';
+      } else if (lt) {
+        cls += ' ' + lt;
+        tip += ' ' + TYPE_LABELS[lt];
+      }
+      cells += `<div class="${cls}" title="${tip}">${d}</div>`;
+    }
+    return `<div class="month-card card">
+      <div class="month-header">${y}年${month+1}月</div>
+      <div class="weekday-row">${WEEKDAYS.map(w=>`<span>${w}</span>`).join('')}</div>
+      <div class="day-grid">${cells}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderComparison(allPlans, best) {
+  const tbody = document.getElementById('compBody');
+  const top5 = allPlans.slice(0, 5);
+  // 存到全局方便点击时查找
+  window._allPlans = allPlans;
+  tbody.innerHTML = top5.map((plan, i) => {
+    const orderStr = plan.segments.map(s => TYPE_LABELS[s.type]).join(' → ');
+    const returnDate = nextCommuteDay(plan.endDate);
+    const isBest = (i === 0);
+    return `<tr class="plan-row ${isBest ? 'best-row' : ''}" onclick="switchPlan(${i})" title="点击查看此方案日历">
+      <td>${isBest ? '最优 <span class="best-badge">BEST</span>' : '方案 '+(i+1)}</td>
+      <td>${orderStr}</td>
+      <td>${plan.totalCalendarDays} 天</td>
+      <td>${fmtDateCN(plan.endDate)}</td>
+      <td>${fmtDateCN(returnDate)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// 点击方案行切换日历
+function switchPlan(idx) {
+  const plan = window._allPlans[idx];
+  if (!plan) return;
+
+  // 高亮切换
+  document.querySelectorAll('.plan-row').forEach((tr, i) => {
+    tr.classList.toggle('active-row', i === idx);
+  });
+
+  // 更新汇总
+  const returnDate = nextCommuteDay(plan.endDate);
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="summary-item highlight"><div class="num">${plan.totalCalendarDays}</div><div class="lbl">总日历天数</div></div>
+    <div class="summary-item"><div class="num">${fmtDateCN(plan.startDate)}</div><div class="lbl">开始日期</div></div>
+    <div class="summary-item"><div class="num">${fmtDateCN(plan.endDate)}</div><div class="lbl">最后一天</div></div>
+    <div class="summary-item"><div class="num">${fmtDateCN(returnDate)}</div><div class="lbl">返工日期（到岗）</div></div>
+  `;
+
+  // 更新步骤条
+  document.getElementById('planBar').innerHTML = plan.segments.map((seg, i) => {
+    const label = TYPE_LABELS[seg.type];
+    const color = TYPE_COLORS[seg.type];
+    return `${i>0?'<span class="plan-arrow">→</span>':''}
+      <span class="plan-step"><span class="step-dot" style="background:${color}"></span>
+      ${label} ${seg.daysUsed}天 <small style="color:#888">(${fmtDateCN(seg.start)} ~ ${fmtDateCN(seg.end)})</small></span>`;
+  }).join('');
+
+  // 更新日历
+  renderCalendar(plan);
+}
+
+// ===== 主入口 =====
+function calculate() {
+  const startStr = document.getElementById('startDate').value;
+  const annualDays = parseInt(document.getElementById('annualDays').value) || 0;
+  const sickDays = parseInt(document.getElementById('sickDays').value) || 0;
+  const patVal = parseInt(document.getElementById('patDays').value);
+  const patDays = isNaN(patVal) ? 0 : patVal;
+  const marrVal = parseInt(document.getElementById('marriageDays').value);
+  const marriageDays = isNaN(marrVal) ? 0 : marrVal;
+
+  if (!startStr) { alert('请选择起始休假日期'); return; }
+  if (annualDays === 0 && sickDays === 0 && patDays === 0 && marriageDays === 0) { alert('请至少输入一种假期天数'); return; }
+
+  // 拆分病假为每段最多 2 天的块
+  const sickBlocksRaw = splitSickDays(sickDays);
+  const sickBlocks = sickBlocksRaw.map((days, i) => ({ id: 'sick_' + i, days }));
+
+  const startDate = new Date(startStr + 'T00:00:00');
+  const allPlans = findAllPlans(startDate, annualDays, sickBlocks, patDays, marriageDays);
+  const best = allPlans[0];
+
+  renderResults(best, allPlans);
+}
+
+// 默认日期设为今天
+window.addEventListener('DOMContentLoaded', () => {
+  const today = new Date();
+  document.getElementById('startDate').value = fmtDate(today);
+  onRemoteChange(); // 初始化 REMOTE_DAYS
+});
+</script>
+</body>
+</html>
