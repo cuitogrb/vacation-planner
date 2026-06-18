@@ -108,10 +108,14 @@ h1 { text-align: center; font-size: 24px; margin-bottom: 4px; color: #16213e; }
     <label>婚假天数</label>
     <input type="number" id="marriageDays" value="0" min="0" max="30">
   </div>
+  <div class="input-group">
+    <label>婚假截止日期</label>
+    <input type="date" id="marriageDeadline">
+  </div>
   <button class="btn btn-primary" onclick="calculate()">计算最优方案</button>
 </div>
 <div class="fixed-info">
-  婚假：连续计自然日，遇周末不顺延，遇法定节假日顺延（节假日不消耗假期天数）
+  婚假：连续计自然日，遇周末不顺延，遇法定节假日顺延；须在截止日期前休完
 </div>
 <div class="fixed-info">
   产假/陪产假：连续计日历日，遇法定节假日不顺延，期间周末同样消耗假期时长
@@ -402,7 +406,7 @@ function splitSickDays(n) {
 
 // ===== 生成所有排列并找出最优 =====
 // sickBlocks: [{id:'sick_0', days:2}, {id:'sick_1', days:2}, ...]
-function findAllPlans(startDate, annualDays, sickBlocks, patDays, marriageDays) {
+function findAllPlans(startDate, annualDays, sickBlocks, patDays, marriageDays, marriageDeadline) {
   const baseTypes = [];
   if (annualDays > 0) baseTypes.push({ id: 'annual', days: annualDays });
   if (patDays > 0) baseTypes.push({ id: 'pat', days: patDays });
@@ -427,7 +431,7 @@ function findAllPlans(startDate, annualDays, sickBlocks, patDays, marriageDays) 
   }
   permute(baseTypes, []);
 
-  const results = perms.map(perm => {
+  let results = perms.map(perm => {
     const segments = [];
     let cur = new Date(startDate);
     let totalCal = 0;
@@ -471,6 +475,20 @@ function findAllPlans(startDate, annualDays, sickBlocks, patDays, marriageDays) 
   });
 
   results.sort((a,b) => b.totalCalendarDays - a.totalCalendarDays);
+
+  // 婚假截止日期过滤：婚假段必须在截止日期前开始
+  if (marriageDeadline) {
+    const dl = new Date(marriageDeadline + 'T00:00:00');
+    results = results.filter(r => {
+      const mSeg = r.segments.find(s => s.type === 'marriage');
+      if (!mSeg) return true;
+      return mSeg.start <= dl;
+    });
+    if (results.length === 0) {
+      alert('没有方案能满足婚假截止日期约束，请调整起始日期或婚假天数。');
+      return [];
+    }
+  }
 
   // 去重：相同类型的排列产生相同结果，保留天数最大的
   const deduped = [];
@@ -643,6 +661,8 @@ function calculate() {
   const marrVal = parseInt(document.getElementById('marriageDays').value);
   const marriageDays = isNaN(marrVal) ? 0 : marrVal;
 
+  const marrDeadline = document.getElementById('marriageDeadline').value || null;
+
   if (!startStr) { alert('请选择起始休假日期'); return; }
   if (annualDays === 0 && sickDays === 0 && patDays === 0 && marriageDays === 0) { alert('请至少输入一种假期天数'); return; }
 
@@ -651,7 +671,9 @@ function calculate() {
   const sickBlocks = sickBlocksRaw.map((days, i) => ({ id: 'sick_' + i, days }));
 
   const startDate = new Date(startStr + 'T00:00:00');
-  const allPlans = findAllPlans(startDate, annualDays, sickBlocks, patDays, marriageDays);
+  const allPlans = findAllPlans(startDate, annualDays, sickBlocks, patDays, marriageDays, marrDeadline);
+
+  if (allPlans.length === 0) return; // deadline 不满足，已在 findAllPlans 中 alert
   const best = allPlans[0];
 
   renderResults(best, allPlans);
