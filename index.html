@@ -58,6 +58,9 @@ h1 { text-align: center; font-size: 24px; margin-bottom: 4px; color: #16213e; }
 .comp-table th { background: #f8fafc; color: #666; font-weight: 600; }
 .comp-table .best-row { background: #e8f0fe; font-weight: 600; }
 .comp-table .best-row td { color: #4361ee; }
+.comp-table .plan-row { cursor: pointer; transition: background 0.15s; }
+.comp-table .plan-row:hover { background: #f0f4ff; }
+.comp-table .plan-row.active-row { background: #dce8fc; font-weight: 600; }
 .best-badge { display: inline-block; background: #4361ee; color: #fff; font-size: 10px; padding: 2px 8px; border-radius: 10px; margin-left: 4px; }
 /* Legend */
 .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
@@ -581,11 +584,14 @@ function renderCalendar(best) {
 
 function renderComparison(allPlans, best) {
   const tbody = document.getElementById('compBody');
-  tbody.innerHTML = allPlans.map((plan, i) => {
+  const top5 = allPlans.slice(0, 5);
+  // 存到全局方便点击时查找
+  window._allPlans = allPlans;
+  tbody.innerHTML = top5.map((plan, i) => {
     const orderStr = plan.segments.map(s => TYPE_LABELS[s.type]).join(' → ');
     const returnDate = nextCommuteDay(plan.endDate);
     const isBest = (i === 0);
-    return `<tr class="${isBest ? 'best-row' : ''}">
+    return `<tr class="plan-row ${isBest ? 'best-row' : ''}" onclick="switchPlan(${i})" title="点击查看此方案日历">
       <td>${isBest ? '最优 <span class="best-badge">BEST</span>' : '方案 '+(i+1)}</td>
       <td>${orderStr}</td>
       <td>${plan.totalCalendarDays} 天</td>
@@ -593,6 +599,38 @@ function renderComparison(allPlans, best) {
       <td>${fmtDateCN(returnDate)}</td>
     </tr>`;
   }).join('');
+}
+
+// 点击方案行切换日历
+function switchPlan(idx) {
+  const plan = window._allPlans[idx];
+  if (!plan) return;
+
+  // 高亮切换
+  document.querySelectorAll('.plan-row').forEach((tr, i) => {
+    tr.classList.toggle('active-row', i === idx);
+  });
+
+  // 更新汇总
+  const returnDate = nextCommuteDay(plan.endDate);
+  document.getElementById('summaryGrid').innerHTML = `
+    <div class="summary-item highlight"><div class="num">${plan.totalCalendarDays}</div><div class="lbl">总日历天数</div></div>
+    <div class="summary-item"><div class="num">${fmtDateCN(plan.startDate)}</div><div class="lbl">开始日期</div></div>
+    <div class="summary-item"><div class="num">${fmtDateCN(plan.endDate)}</div><div class="lbl">最后一天</div></div>
+    <div class="summary-item"><div class="num">${fmtDateCN(returnDate)}</div><div class="lbl">返工日期（到岗）</div></div>
+  `;
+
+  // 更新步骤条
+  document.getElementById('planBar').innerHTML = plan.segments.map((seg, i) => {
+    const label = TYPE_LABELS[seg.type];
+    const color = TYPE_COLORS[seg.type];
+    return `${i>0?'<span class="plan-arrow">→</span>':''}
+      <span class="plan-step"><span class="step-dot" style="background:${color}"></span>
+      ${label} ${seg.daysUsed}天 <small style="color:#888">(${fmtDateCN(seg.start)} ~ ${fmtDateCN(seg.end)})</small></span>`;
+  }).join('');
+
+  // 更新日历
+  renderCalendar(plan);
 }
 
 // ===== 主入口 =====
